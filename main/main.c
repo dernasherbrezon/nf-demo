@@ -442,4 +442,9 @@ void app_main(void) {
   if (task_code != pdPASS) {
     return;
   }
+
+  uint8_t *uuid = service1.items[0].id.id.uuid.uuid.uuid128;
+  ESP_LOGI(GATTS_TAG, "https://nfinterface.com/scan?name=%s&serviceUuid=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", TEST_DEVICE_NAME, uuid[15], uuid[14], uuid[13], uuid[12], uuid[11], uuid[10], uuid[9], uuid[8], uuid[7], uuid[6], uuid[5], uuid[4], uuid[3], uuid[2],uuid[1], uuid[0]);
+  uuid = service2.items[0].id.id.uuid.uuid.uuid128;
+  ESP_LOGI(GATTS_TAG, "https://nfinterface.com/scan?name=%s&serviceUuid=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", TEST_DEVICE_NAME, uuid[15], uuid[14], uuid[13], uuid[12], uuid[11], uuid[10], uuid[9], uuid[8], uuid[7], uuid[6], uuid[5], uuid[4], uuid[3], uuid[2],uuid[1], uuid[0]);
 }
