@@ -3,22 +3,6 @@
 
 #include "common.h"
 
-typedef struct {
-  uint16_t type;
-  esp_bt_uuid_t uuid;
-  uint16_t handle;
-  esp_attr_value_t value;
-  esp_attr_control_t control;
-  esp_gatt_srvc_id_t id;
-  uint16_t service_handle;
-} ble_item;
-
-typedef struct {
-  size_t item_count;
-  size_t current_item;
-  ble_item *items;
-} service;
-
 enum {
   SERVICE1,
   SERVICE1_MODEL,
@@ -54,6 +38,7 @@ ble_item service1_items[SERVICE1_TOTAL] = {
             .len = ESP_UUID_LEN_16,
             .uuid.uuid16 = 0x2A24
         },
+        .property = ESP_GATT_CHAR_PROP_BIT_READ,
         .value = {
             .attr_value = (uint8_t *) service1_model_name,
             .attr_len = strlen(service1_model_name),
@@ -68,6 +53,7 @@ ble_item service1_items[SERVICE1_TOTAL] = {
             .len = ESP_UUID_LEN_16,
             .uuid.uuid16 = 0x2A29
         },
+        .property = ESP_GATT_CHAR_PROP_BIT_READ,
         .value = {
             .attr_value = (uint8_t *) service1_manuf_name,
             .attr_len = strlen(service1_manuf_name),
@@ -82,6 +68,7 @@ ble_item service1_items[SERVICE1_TOTAL] = {
             .len = ESP_UUID_LEN_128,
             .uuid.uuid128 = {0xe0, 0xa, 0x30, 0x1e, 0x6c, 0xe9, 0x41, 0xa6, 0xe0, 0xa, 0x30, 0x1e, 0x6c, 0xe9, 0x41, 0xa6}
         },
+        .property = ESP_GATT_CHAR_PROP_BIT_READ,
         .value = {
             .attr_value = (uint8_t *) maxpower,
             .attr_len = strlen(maxpower),
