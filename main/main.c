@@ -47,14 +47,6 @@ static uint8_t adv_config_done = 0;
 #define adv_config_flag      (1 << 0)
 #define scan_rsp_config_flag (1 << 1)
 
-static uint8_t adv_service_uuid128[32] = {
-    /* LSB <--------------------------------------------------------------------------------> MSB */
-    //first uuid, 16bit, [12],[13] is the value
-    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0xEE, 0x00, 0x00, 0x00,
-    //second uuid, 32bit, [12], [13], [14], [15] is the value
-    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00,
-};
-
 TaskHandle_t handle_interrupt;
 
 
@@ -71,8 +63,8 @@ static esp_ble_adv_data_t adv_data = {
     .p_manufacturer_data =  NULL,
     .service_data_len = 0,
     .p_service_data = NULL,
-    .service_uuid_len = sizeof(adv_service_uuid128),
-    .p_service_uuid = adv_service_uuid128,
+    .service_uuid_len = 0,
+    .p_service_uuid = NULL,
     .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
 };
 // scan response data
@@ -87,8 +79,8 @@ static esp_ble_adv_data_t scan_rsp_data = {
     .p_manufacturer_data =  NULL,
     .service_data_len = 0,
     .p_service_data = NULL,
-    .service_uuid_len = sizeof(adv_service_uuid128),
-    .p_service_uuid = adv_service_uuid128,
+    .service_uuid_len = 0,
+    .p_service_uuid = NULL,
     .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
 };
 
@@ -131,14 +123,14 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
     case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
       //advertising start complete event to indicate advertising start successfully or failed
       if (param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-        ESP_LOGE(GATTS_TAG, "Advertising start failed\n");
+        ESP_LOGE(GATTS_TAG, "Advertising start failed");
       }
       break;
     case ESP_GAP_BLE_ADV_STOP_COMPLETE_EVT:
       if (param->adv_stop_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-        ESP_LOGE(GATTS_TAG, "Advertising stop failed\n");
+        ESP_LOGE(GATTS_TAG, "Advertising stop failed");
       } else {
-        ESP_LOGI(GATTS_TAG, "Stop adv successfully\n");
+        ESP_LOGI(GATTS_TAG, "Stop adv successfully");
       }
       break;
     case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
@@ -162,11 +154,6 @@ static void register_item(esp_gatt_if_t gatts_if, service *cur_service, ble_item
       break;
     }
     case TYPE_CHARACTERISTIC: {
-      if (cur_item->value.attr_value != NULL) {
-        ESP_LOGI(GATTS_TAG, "register char: %d \"%s\" %d", cur_service->items->handle, cur_item->value.attr_value, cur_item->control.auto_rsp);
-      } else {
-        ESP_LOGI(GATTS_TAG, "register char: %d %d", cur_service->items->handle, cur_item->control.auto_rsp);
-      }
       esp_err_t add_char_ret = esp_ble_gatts_add_char(cur_service->items->handle, &cur_item->uuid,
                                                       ESP_GATT_PERM_READ,
                                                       cur_item->property,
@@ -177,7 +164,6 @@ static void register_item(esp_gatt_if_t gatts_if, service *cur_service, ble_item
       break;
     }
     case TYPE_DESCRIPTION: {
-      ESP_LOGI(GATTS_TAG, "register desc: %d", cur_service->items->handle);
       esp_err_t add_descr_ret = esp_ble_gatts_add_char_descr(cur_service->items->handle, &cur_item->uuid,
                                                              ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, &cur_item->value, &cur_item->control);
       if (add_descr_ret) {
@@ -288,7 +274,7 @@ static void callback_write_event(esp_ble_gatts_cb_param_t *param) {
 static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
   switch (event) {
     case ESP_GATTS_REG_EVT: {
-      ESP_LOGI(GATTS_TAG, "ESP_GATTS_REG_EVT, status %d, app_id %d\n", param->reg.status, param->reg.app_id);
+      ESP_LOGI(GATTS_TAG, "ESP_GATTS_REG_EVT, status %d, app_id %d", param->reg.status, param->reg.app_id);
       esp_err_t set_dev_name_ret = esp_ble_gap_set_device_name(TEST_DEVICE_NAME);
       if (set_dev_name_ret) {
         ESP_LOGE(GATTS_TAG, "set device name failed, error code = %x", set_dev_name_ret);
@@ -312,7 +298,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
       break;
     }
     case ESP_GATTS_READ_EVT: {
-      ESP_LOGI(GATTS_TAG, "ESP_GATTS_READ_EVT, conn_id %d, trans_id %" PRIu32 ", handle %d\n", param->read.conn_id, param->read.trans_id, param->read.handle);
+      ESP_LOGI(GATTS_TAG, "ESP_GATTS_READ_EVT, conn_id %d, trans_id %" PRIu32 ", handle %d", param->read.conn_id, param->read.trans_id, param->read.handle);
       callback_read_event(param);
       break;
     }
@@ -328,24 +314,24 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
       ESP_LOGI(GATTS_TAG, "ESP_GATTS_MTU_EVT, MTU %d", param->mtu.mtu);
       break;
     case ESP_GATTS_CREATE_EVT:
-      ESP_LOGI(GATTS_TAG, "ESP_GATTS_CREATE_EVT, status %d,  service_handle %d\n", param->create.status, param->create.service_handle);
+      ESP_LOGI(GATTS_TAG, "ESP_GATTS_CREATE_EVT, status %d,  service_handle %d", param->create.status, param->create.service_handle);
       esp_ble_gatts_start_service(param->create.service_handle);
       register_next(gatts_if, param->create.service_handle);
       break;
     case ESP_GATTS_ADD_CHAR_EVT: {
-      ESP_LOGI(GATTS_TAG, "ESP_GATTS_ADD_CHAR_EVT, status %d,  attr_handle %d, service_handle %d\n",
+      ESP_LOGI(GATTS_TAG, "ESP_GATTS_ADD_CHAR_EVT, status %d,  attr_handle %d, service_handle %d",
                param->add_char.status, param->add_char.attr_handle, param->add_char.service_handle);
       register_next(gatts_if, param->add_char.attr_handle);
       break;
     }
     case ESP_GATTS_ADD_CHAR_DESCR_EVT: {
-      ESP_LOGI(GATTS_TAG, "ESP_GATTS_ADD_CHAR_DESCR_EVT, status %d, attr_handle %d, service_handle %d\n",
+      ESP_LOGI(GATTS_TAG, "ESP_GATTS_ADD_CHAR_DESCR_EVT, status %d, attr_handle %d, service_handle %d",
                param->add_char_descr.status, param->add_char_descr.attr_handle, param->add_char_descr.service_handle);
       register_next(gatts_if, param->add_char_descr.attr_handle);
       break;
     }
     case ESP_GATTS_START_EVT:
-      ESP_LOGI(GATTS_TAG, "SERVICE_START_EVT, status %d, service_handle %d\n", param->start.status, param->start.service_handle);
+      ESP_LOGI(GATTS_TAG, "SERVICE_START_EVT, status %d, service_handle %d", param->start.status, param->start.service_handle);
       break;
     case ESP_GATTS_CONNECT_EVT: {
       esp_ble_conn_update_params_t conn_params = {0};
@@ -412,23 +398,23 @@ void app_main(void) {
   esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
   ret = esp_bt_controller_init(&bt_cfg);
   if (ret) {
-    ESP_LOGE(GATTS_TAG, "%s initialize controller failed: %s\n", __func__, esp_err_to_name(ret));
+    ESP_LOGE(GATTS_TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(ret));
     return;
   }
 
   ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
   if (ret) {
-    ESP_LOGE(GATTS_TAG, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
+    ESP_LOGE(GATTS_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
     return;
   }
   ret = esp_bluedroid_init();
   if (ret) {
-    ESP_LOGE(GATTS_TAG, "%s init bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
+    ESP_LOGE(GATTS_TAG, "%s init bluetooth failed: %s", __func__, esp_err_to_name(ret));
     return;
   }
   ret = esp_bluedroid_enable();
   if (ret) {
-    ESP_LOGE(GATTS_TAG, "%s enable bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
+    ESP_LOGE(GATTS_TAG, "%s enable bluetooth failed: %s", __func__, esp_err_to_name(ret));
     return;
   }
 
