@@ -39,8 +39,8 @@ enum {
 
 static const uint16_t primary_service_uuid = ESP_GATT_UUID_PRI_SERVICE;
 static const uint16_t character_declaration_uuid = ESP_GATT_UUID_CHAR_DECLARE;
-static const uint8_t utf8_string_format = 0x19;
-static const uint8_t float_format = 0x14;
+uint8_t utf8_string_format[7] = {0x19, 0x00, 0x27, 0x00, 0x00, 0x00, 0x00};
+uint8_t float_format[7] = {0x14, 0x00, 0x27, 0x00, 0x00, 0x00, 0x00};
 
 static const uint8_t char_prop_read = ESP_GATT_CHAR_PROP_BIT_READ;
 static const uint8_t char_prop_write = ESP_GATT_CHAR_PROP_BIT_WRITE;

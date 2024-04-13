@@ -106,7 +106,7 @@ ble_item service2_items[SERVICE2_TOTAL] = {
         .value = {
             .attr_len = sizeof(float_format),
             .attr_max_len = sizeof(float_format),
-            .attr_value = (uint8_t *) &float_format
+            .attr_value = float_format
         },
         .control = {
             .auto_rsp = ESP_GATT_AUTO_RSP
