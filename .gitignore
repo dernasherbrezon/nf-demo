@@ -53,4 +53,5 @@ dkms.conf
 build
 cmake-build-debug
 .idea
-sdkconfig*
+sdkconfig
+sdkconfig.old
