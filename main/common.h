@@ -37,10 +37,56 @@ enum {
   TYPE_DESCRIPTION
 };
 
+/**
+ * @note See Bluetooth Specification 4.0 (Vol. 3), Part G, Section 3.3.3.5.
+ */
+typedef struct __attribute__((packed)) {
+  /**
+   * Format of the value.
+   * @see https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/Assigned_Numbers.pdf?v=1710672234752
+   */
+  uint8_t gatt_format;
+  /**
+   * Exponent for integer data types.
+   * Example: if Exponent = -3 and the char value is 3892, the actual value is 3.892
+   */
+  int8_t exponent;
+  /**
+   * Unit of the characteristic value.
+   *
+   * @see https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/Assigned_Numbers.pdf?v=1710672234752
+   */
+  uint16_t gatt_unit;
+  /**
+   * Namespace of the description field.
+   * @note The namespace of the Bluetooth Body is 0x01.
+   */
+  uint8_t gatt_namespace;
+  /**
+   *  Space description
+   *  @note The value 0x0000 means unknown in the Bluetooth namespace.
+   */
+  uint16_t gatt_nsdesc;
+} presentation_format_t;
+
 static const uint16_t primary_service_uuid = ESP_GATT_UUID_PRI_SERVICE;
 static const uint16_t character_declaration_uuid = ESP_GATT_UUID_CHAR_DECLARE;
-uint8_t utf8_string_format[7] = {0x19, 0x00, 0x27, 0x00, 0x00, 0x00, 0x00};
-uint8_t float_format[7] = {0x14, 0x00, 0x27, 0x00, 0x00, 0x00, 0x00};
+
+presentation_format_t utf8_string_format = {
+    .gatt_format = 0x19, //utf8
+    .exponent = 0x00,
+    .gatt_unit = 0x2700, //unitless
+    .gatt_namespace = 0x00,
+    .gatt_nsdesc = 0x0000
+};
+
+presentation_format_t float_format = {
+    .gatt_format = 0x14, //4-byte float
+    .exponent = 0x00,
+    .gatt_unit = 0x2700, //unitless
+    .gatt_namespace = 0x00,
+    .gatt_nsdesc = 0x0000
+};
 
 static const uint8_t char_prop_read = ESP_GATT_CHAR_PROP_BIT_READ;
 static const uint8_t char_prop_write = ESP_GATT_CHAR_PROP_BIT_WRITE;

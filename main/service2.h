@@ -20,6 +20,7 @@ static const char service2_la_name[] = "Load Average";
 uint8_t service2_la_ccd[2] = {0x00, 0x00};
 
 extern void service2_la_callback(esp_ble_gatts_cb_param_t *param);
+
 extern void service2_la_write_callback(void *item, esp_ble_gatts_cb_param_t *param);
 
 ble_item service2_items[SERVICE2_TOTAL] = {
@@ -106,7 +107,7 @@ ble_item service2_items[SERVICE2_TOTAL] = {
         .value = {
             .attr_len = sizeof(float_format),
             .attr_max_len = sizeof(float_format),
-            .attr_value = float_format
+            .attr_value = (uint8_t *) &float_format
         },
         .control = {
             .auto_rsp = ESP_GATT_AUTO_RSP
