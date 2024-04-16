@@ -21,7 +21,9 @@ typedef struct {
   uint16_t service_handle;
   uint16_t char_handle;
   esp_gatt_char_prop_t property;
+
   void (*read_callback)(esp_ble_gatts_cb_param_t *);
+
   void (*write_callback)(void *item, esp_ble_gatts_cb_param_t *);
 } ble_item;
 
@@ -30,6 +32,23 @@ typedef struct {
   size_t current_item;
   ble_item *items;
 } service;
+
+typedef enum {
+  NOTIFICATION_REALTIME = 0,
+  NOTIFICATION_GRAPH = 1,
+  NOTIFICATION_END_OF_GRAPH = 2
+} notification_type_t;
+
+typedef struct __attribute__((packed)) {
+  uint64_t timestamp;
+  float value;
+} data_point_t;
+
+typedef enum {
+  DAY = 0,
+  MONTH = 1,
+  YEAR = 2
+} graph_interval_t;
 
 enum {
   TYPE_PRIMARY_SERVICE,

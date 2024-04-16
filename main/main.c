@@ -184,9 +184,69 @@ void service2_la_callback(esp_ble_gatts_cb_param_t *param) {
   esp_ble_gatts_send_response(app.gatts_if, param->read.conn_id, param->read.trans_id, ESP_GATT_OK, &rsp);
 }
 
+// should be per connection
 uint16_t global_conn_id;
 uint16_t global_char_handle;
+uint16_t global_mtu;
+uint8_t *temp_buffer = NULL;
+
 bool notify_enabled = false;
+
+void service2_la_graph_write_callback(void *payload, esp_ble_gatts_cb_param_t *param) {
+  if (param->write.len < 1) {
+    ESP_LOGI(GATTS_TAG, "write len %d", param->write.len);
+    return;
+  }
+  if (param->write.is_prep) {
+    ESP_LOGI(GATTS_TAG, "write len %d", param->write.is_prep);
+    return;
+  }
+  ble_item *item = (ble_item *) payload;
+  uint8_t request_type = param->write.value[0];
+
+  data_point_t *graph_to_send = NULL;
+  size_t to_send_bytes = 0;
+  switch (request_type) {
+    case DAY: {
+      graph_to_send = (data_point_t *) daily;
+      to_send_bytes = sizeof(daily);
+      break;
+    }
+    case MONTH: {
+      graph_to_send = (data_point_t *) monthly;
+      to_send_bytes = sizeof(monthly);
+      break;
+    }
+    case YEAR: {
+      graph_to_send = (data_point_t *) yearly;
+      to_send_bytes = sizeof(yearly);
+      break;
+    }
+    default:
+      return;
+  }
+  size_t points = to_send_bytes / sizeof(data_point_t);
+  size_t data_point_size = sizeof(data_point_t);
+  size_t rounded_mtu = ((global_mtu - 1) / data_point_size) * data_point_size + 1; // 1 is for message type
+  size_t number_of_batches = to_send_bytes / rounded_mtu;
+  if ((to_send_bytes % rounded_mtu) != 0) {
+    number_of_batches++;
+  }
+  size_t number_of_points_in_batch = (rounded_mtu - 1) / data_point_size;
+  ESP_LOGI(GATTS_TAG, "sending batches. points: %zu mtu: %d rounded mtu: %d number of batches: %zu", points, global_mtu, rounded_mtu, number_of_batches);
+  temp_buffer[0] = NOTIFICATION_GRAPH;
+  for (size_t i = 0; i < number_of_batches; i++) {
+    size_t current_number_of_points = number_of_points_in_batch;
+    if (((i + 1) * number_of_points_in_batch) > points) {
+      current_number_of_points = points - i * number_of_points_in_batch;
+    }
+    ESP_LOGI(GATTS_TAG, "sending %zu", current_number_of_points);
+    memcpy(temp_buffer + 1, graph_to_send + i * number_of_points_in_batch, current_number_of_points * data_point_size);
+    esp_ble_gatts_send_indicate(app.gatts_if, param->write.conn_id, item->char_handle, current_number_of_points * data_point_size + 1, temp_buffer, false);
+  }
+  temp_buffer[0] = NOTIFICATION_END_OF_GRAPH;
+  esp_ble_gatts_send_indicate(app.gatts_if, param->write.conn_id, item->char_handle, 1, temp_buffer, false);
+}
 
 void service2_la_write_callback(void *payload, esp_ble_gatts_cb_param_t *param) {
   if (param->write.len < 1) {
@@ -198,7 +258,7 @@ void service2_la_write_callback(void *payload, esp_ble_gatts_cb_param_t *param) 
     return;
   }
   ble_item *item = (ble_item *) payload;
-  uint16_t descr_value = param->write.value[0];
+  uint8_t descr_value = param->write.value[0];
   if (descr_value == 0x01) {
     // supported only single connection on a single characteristic
     global_conn_id = param->write.conn_id;
@@ -222,7 +282,9 @@ void handle_interrupt_task(void *arg) {
   for (;;) {
     if (notify_enabled) {
       float la = (float) rand() / 100;
-      esp_ble_gatts_send_indicate(app.gatts_if, global_conn_id, global_char_handle, sizeof(la), (uint8_t *) &la, false);
+      temp_buffer[0] = NOTIFICATION_REALTIME;
+      memcpy(temp_buffer + 1, &la, sizeof(la));
+      esp_ble_gatts_send_indicate(app.gatts_if, global_conn_id, global_char_handle, sizeof(la) + 1, temp_buffer, false);
     }
     vTaskDelay(xDelay);
   }
@@ -312,6 +374,8 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
       break;
     case ESP_GATTS_MTU_EVT:
       ESP_LOGI(GATTS_TAG, "ESP_GATTS_MTU_EVT, MTU %d", param->mtu.mtu);
+      global_mtu = param->mtu.mtu;
+      temp_buffer = malloc(sizeof(uint8_t) * (global_mtu + 1));
       break;
     case ESP_GATTS_CREATE_EVT:
       ESP_LOGI(GATTS_TAG, "ESP_GATTS_CREATE_EVT, status %d,  service_handle %d", param->create.status, param->create.service_handle);
@@ -444,7 +508,9 @@ void app_main(void) {
   }
 
   uint8_t *uuid = service1.items[0].id.id.uuid.uuid.uuid128;
-  ESP_LOGI(GATTS_TAG, "https://nfinterface.com/scan?name=%s&serviceUuid=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", TEST_DEVICE_NAME, uuid[15], uuid[14], uuid[13], uuid[12], uuid[11], uuid[10], uuid[9], uuid[8], uuid[7], uuid[6], uuid[5], uuid[4], uuid[3], uuid[2],uuid[1], uuid[0]);
+  ESP_LOGI(GATTS_TAG, "https://nfinterface.com/scan?name=%s&serviceUuid=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", TEST_DEVICE_NAME, uuid[15], uuid[14], uuid[13], uuid[12], uuid[11], uuid[10], uuid[9], uuid[8], uuid[7], uuid[6], uuid[5], uuid[4], uuid[3], uuid[2],
+           uuid[1], uuid[0]);
   uuid = service2.items[0].id.id.uuid.uuid.uuid128;
-  ESP_LOGI(GATTS_TAG, "https://nfinterface.com/scan?name=%s&serviceUuid=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", TEST_DEVICE_NAME, uuid[15], uuid[14], uuid[13], uuid[12], uuid[11], uuid[10], uuid[9], uuid[8], uuid[7], uuid[6], uuid[5], uuid[4], uuid[3], uuid[2],uuid[1], uuid[0]);
+  ESP_LOGI(GATTS_TAG, "https://nfinterface.com/scan?name=%s&serviceUuid=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", TEST_DEVICE_NAME, uuid[15], uuid[14], uuid[13], uuid[12], uuid[11], uuid[10], uuid[9], uuid[8], uuid[7], uuid[6], uuid[5], uuid[4], uuid[3], uuid[2],
+           uuid[1], uuid[0]);
 }
