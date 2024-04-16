@@ -11,6 +11,8 @@
 #include "esp_bt_main.h"
 #include "esp_gatt_common_api.h"
 
+#define PROTOCOL_VERSION 1
+
 typedef struct {
   uint16_t type;
   esp_bt_uuid_t uuid;

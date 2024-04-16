@@ -227,25 +227,27 @@ void service2_la_graph_write_callback(void *payload, esp_ble_gatts_cb_param_t *p
   }
   size_t points = to_send_bytes / sizeof(data_point_t);
   size_t data_point_size = sizeof(data_point_t);
-  size_t rounded_mtu = ((global_mtu - 1) / data_point_size) * data_point_size + 1; // 1 is for message type
+  size_t rounded_mtu = ((global_mtu - 3) / data_point_size) * data_point_size + 3; //1 is for protocol, 1 is for message type and 1 for number of points
   size_t number_of_batches = to_send_bytes / rounded_mtu;
   if ((to_send_bytes % rounded_mtu) != 0) {
     number_of_batches++;
   }
-  size_t number_of_points_in_batch = (rounded_mtu - 1) / data_point_size;
+  size_t number_of_points_in_batch = (rounded_mtu - 3) / data_point_size;
   ESP_LOGI(GATTS_TAG, "sending batches. points: %zu mtu: %d rounded mtu: %d number of batches: %zu", points, global_mtu, rounded_mtu, number_of_batches);
-  temp_buffer[0] = NOTIFICATION_GRAPH;
+  temp_buffer[0] = PROTOCOL_VERSION;
+  temp_buffer[1] = NOTIFICATION_GRAPH;
   for (size_t i = 0; i < number_of_batches; i++) {
-    size_t current_number_of_points = number_of_points_in_batch;
+    uint8_t current_number_of_points = (uint8_t) number_of_points_in_batch;
     if (((i + 1) * number_of_points_in_batch) > points) {
-      current_number_of_points = points - i * number_of_points_in_batch;
+      current_number_of_points = (uint8_t) (points - i * number_of_points_in_batch);
     }
     ESP_LOGI(GATTS_TAG, "sending %zu", current_number_of_points);
-    memcpy(temp_buffer + 1, graph_to_send + i * number_of_points_in_batch, current_number_of_points * data_point_size);
-    esp_ble_gatts_send_indicate(app.gatts_if, param->write.conn_id, item->char_handle, current_number_of_points * data_point_size + 1, temp_buffer, false);
+    temp_buffer[2] = current_number_of_points;
+    memcpy(temp_buffer + 3, graph_to_send + i * number_of_points_in_batch, current_number_of_points * data_point_size);
+    esp_ble_gatts_send_indicate(app.gatts_if, param->write.conn_id, item->char_handle, current_number_of_points * data_point_size + 3, temp_buffer, false);
   }
-  temp_buffer[0] = NOTIFICATION_END_OF_GRAPH;
-  esp_ble_gatts_send_indicate(app.gatts_if, param->write.conn_id, item->char_handle, 1, temp_buffer, false);
+  temp_buffer[1] = NOTIFICATION_END_OF_GRAPH;
+  esp_ble_gatts_send_indicate(app.gatts_if, param->write.conn_id, item->char_handle, 2, temp_buffer, false);
 }
 
 void service2_la_write_callback(void *payload, esp_ble_gatts_cb_param_t *param) {
