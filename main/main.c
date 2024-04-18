@@ -38,10 +38,8 @@
 #include "sdkconfig.h"
 
 #define GATTS_TAG "NF-DEMO"
-
-#define TEST_DEVICE_NAME            "NF-3bc4e"
-
-#define PREPARE_BUF_MAX_SIZE 1024
+#define TEST_DEVICE_NAME "NF-3bc4e"
+#define MAX_MTU 500
 
 static uint8_t adv_config_done = 0;
 #define adv_config_flag      (1 << 0)
@@ -49,6 +47,7 @@ static uint8_t adv_config_done = 0;
 
 TaskHandle_t handle_interrupt;
 
+uint8_t temp_buffer[MAX_MTU];
 
 // The length of adv data must be less than 31 bytes
 //adv data
@@ -96,12 +95,20 @@ static esp_ble_adv_params_t adv_params = {
 };
 
 typedef struct {
-  uint16_t gatts_if;
+  bool active;
   uint16_t conn_id;
+  uint16_t la_char_handle;
+  bool la_notify_enabled;
+  uint16_t mtu;
+} client_info_t;
+
+typedef struct {
+  uint16_t gatts_if;
   size_t item_count;
   size_t current_item;
   uint16_t current_char_handle;
   service *services;
+  client_info_t client[CONFIG_BT_ACL_CONNECTIONS];
 } global_app;
 
 global_app app;
@@ -111,12 +118,14 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
     case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
       adv_config_done &= (~adv_config_flag);
       if (adv_config_done == 0) {
+        ESP_LOGI(GATTS_TAG, "ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT start advertisizing");
         esp_ble_gap_start_advertising(&adv_params);
       }
       break;
     case ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT:
       adv_config_done &= (~scan_rsp_config_flag);
       if (adv_config_done == 0) {
+        ESP_LOGI(GATTS_TAG, "ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT start advertisizing rsp");
         esp_ble_gap_start_advertising(&adv_params);
       }
       break;
@@ -124,17 +133,19 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
       //advertising start complete event to indicate advertising start successfully or failed
       if (param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
         ESP_LOGE(GATTS_TAG, "Advertising start failed");
+      } else {
+        ESP_LOGI(GATTS_TAG, "ESP_GAP_BLE_ADV_START_COMPLETE_EVT completed");
       }
       break;
     case ESP_GAP_BLE_ADV_STOP_COMPLETE_EVT:
       if (param->adv_stop_cmpl.status != ESP_BT_STATUS_SUCCESS) {
         ESP_LOGE(GATTS_TAG, "Advertising stop failed");
       } else {
-        ESP_LOGI(GATTS_TAG, "Stop adv successfully");
+        ESP_LOGI(GATTS_TAG, "ESP_GAP_BLE_ADV_STOP_COMPLETE_EVT Stop adv successfully");
       }
       break;
     case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
-      ESP_LOGI(GATTS_TAG, "update connection params status = %d, min_int = %d, max_int = %d,conn_int = %d,latency = %d, timeout = %d",
+      ESP_LOGI(GATTS_TAG, "ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT update connection params status = %d, min_int = %d, max_int = %d,conn_int = %d,latency = %d, timeout = %d",
                param->update_conn_params.status,
                param->update_conn_params.min_int,
                param->update_conn_params.max_int,
@@ -184,14 +195,6 @@ void service2_la_callback(esp_ble_gatts_cb_param_t *param) {
   esp_ble_gatts_send_response(app.gatts_if, param->read.conn_id, param->read.trans_id, ESP_GATT_OK, &rsp);
 }
 
-// should be per connection
-uint16_t global_conn_id;
-uint16_t global_char_handle;
-uint16_t global_mtu;
-uint8_t *temp_buffer = NULL;
-
-bool notify_enabled = false;
-
 void service2_la_graph_write_callback(void *payload, esp_ble_gatts_cb_param_t *param) {
   if (param->write.len < 1) {
     ESP_LOGI(GATTS_TAG, "write len %d", param->write.len);
@@ -225,15 +228,25 @@ void service2_la_graph_write_callback(void *payload, esp_ble_gatts_cb_param_t *p
     default:
       return;
   }
+  uint16_t mtu = 0;
+  for (int i = 0; i < CONFIG_BT_ACL_CONNECTIONS; i++) {
+    if (app.client[i].conn_id == param->write.conn_id) {
+      mtu = app.client[i].mtu;
+      break;
+    }
+  }
+  if (mtu == 0) {
+    return;
+  }
   size_t points = to_send_bytes / sizeof(data_point_t);
   size_t data_point_size = sizeof(data_point_t);
-  size_t rounded_mtu = ((global_mtu - 3) / data_point_size) * data_point_size + 3; //1 is for protocol, 1 is for message type and 1 for number of points
+  size_t rounded_mtu = ((mtu - 3) / data_point_size) * data_point_size + 3; //1 is for protocol, 1 is for message type and 1 for number of points
   size_t number_of_batches = to_send_bytes / rounded_mtu;
   if ((to_send_bytes % rounded_mtu) != 0) {
     number_of_batches++;
   }
   size_t number_of_points_in_batch = (rounded_mtu - 3) / data_point_size;
-  ESP_LOGI(GATTS_TAG, "sending batches. points: %zu mtu: %d rounded mtu: %d number of batches: %zu", points, global_mtu, rounded_mtu, number_of_batches);
+  ESP_LOGI(GATTS_TAG, "sending batches. points: %zu mtu: %d rounded mtu: %d number of batches: %zu", points, mtu, rounded_mtu, number_of_batches);
   temp_buffer[0] = PROTOCOL_VERSION;
   temp_buffer[1] = NOTIFICATION_GRAPH;
   for (size_t i = 0; i < number_of_batches; i++) {
@@ -262,31 +275,57 @@ void service2_la_write_callback(void *payload, esp_ble_gatts_cb_param_t *param) 
   ble_item *item = (ble_item *) payload;
   uint8_t descr_value = param->write.value[0];
   if (descr_value == 0x01) {
-    // supported only single connection on a single characteristic
-    global_conn_id = param->write.conn_id;
-    global_char_handle = item->char_handle;
-    ESP_LOGI(GATTS_TAG, "notify enable conn %d char %d", global_conn_id, global_char_handle);
-    notify_enabled = true;
+    for (int i = 0; i < CONFIG_BT_ACL_CONNECTIONS; i++) {
+      if (app.client[i].conn_id == param->write.conn_id) {
+        app.client[i].la_char_handle = item->char_handle;
+        app.client[i].la_notify_enabled = true;
+        ESP_LOGI(GATTS_TAG, "notify enable conn %d char %d", app.client[i].conn_id, app.client[i].la_char_handle);
+        break;
+      }
+    }
   } else if (descr_value == 0x02) {
     ESP_LOGI(GATTS_TAG, "indicate enable");
   } else if (descr_value == 0x00) {
-    ESP_LOGI(GATTS_TAG, "notify/indicate disable ");
-    notify_enabled = false;
+    for (int i = 0; i < CONFIG_BT_ACL_CONNECTIONS; i++) {
+      if (app.client[i].conn_id == param->write.conn_id) {
+        app.client[i].la_notify_enabled = false;
+        ESP_LOGI(GATTS_TAG, "notify disabled conn %d char %d", app.client[i].conn_id, app.client[i].la_char_handle);
+        break;
+      }
+    }
   } else {
     ESP_LOGE(GATTS_TAG, "unknown descr value");
         esp_log_buffer_hex(GATTS_TAG, param->write.value, param->write.len);
   }
 }
 
+bool has_la_notifications_enabled() {
+  for (int i = 0; i < CONFIG_BT_ACL_CONNECTIONS; i++) {
+    if (app.client[i].la_notify_enabled) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void handle_interrupt_task(void *arg) {
 // Block for 500ms.
   const TickType_t xDelay = 5000 / portTICK_PERIOD_MS;
+  size_t notification_buffer_length = 2 + sizeof(float);
+  uint8_t *notification_buffer = malloc(sizeof(uint8_t) * notification_buffer_length);
   for (;;) {
-    if (notify_enabled) {
+    if (has_la_notifications_enabled()) {
+      // somewhat expensive calculation
       float la = (float) rand() / 100;
-      temp_buffer[0] = NOTIFICATION_REALTIME;
-      memcpy(temp_buffer + 1, &la, sizeof(la));
-      esp_ble_gatts_send_indicate(app.gatts_if, global_conn_id, global_char_handle, sizeof(la) + 1, temp_buffer, false);
+      notification_buffer[0] = PROTOCOL_VERSION;
+      notification_buffer[1] = NOTIFICATION_REALTIME;
+      memcpy(notification_buffer + 1, &la, sizeof(la));
+      for (int i = 0; i < CONFIG_BT_ACL_CONNECTIONS; i++) {
+        if (!app.client[i].la_notify_enabled) {
+          continue;
+        }
+        esp_ble_gatts_send_indicate(app.gatts_if, app.client[i].conn_id, app.client[i].la_char_handle, notification_buffer_length, notification_buffer, false);
+      }
     }
     vTaskDelay(xDelay);
   }
@@ -376,8 +415,12 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
       break;
     case ESP_GATTS_MTU_EVT:
       ESP_LOGI(GATTS_TAG, "ESP_GATTS_MTU_EVT, MTU %d", param->mtu.mtu);
-      global_mtu = param->mtu.mtu;
-      temp_buffer = malloc(sizeof(uint8_t) * (global_mtu + 1));
+      for (int i = 0; i < CONFIG_BT_ACL_CONNECTIONS; i++) {
+        if (app.client[i].conn_id != param->mtu.conn_id) {
+          continue;
+        }
+        app.client[i].mtu = param->mtu.mtu;
+      }
       break;
     case ESP_GATTS_CREATE_EVT:
       ESP_LOGI(GATTS_TAG, "ESP_GATTS_CREATE_EVT, status %d,  service_handle %d", param->create.status, param->create.service_handle);
@@ -411,14 +454,31 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
                param->connect.conn_id,
                param->connect.remote_bda[0], param->connect.remote_bda[1], param->connect.remote_bda[2],
                param->connect.remote_bda[3], param->connect.remote_bda[4], param->connect.remote_bda[5]);
-      app.conn_id = param->connect.conn_id;
       //start sent the update connection parameters to the peer device.
       esp_ble_gap_update_conn_params(&conn_params);
+      // search first not active and take it
+      for (int i = 0; i < CONFIG_BT_ACL_CONNECTIONS; i++) {
+        if (app.client[i].active) {
+          continue;
+        }
+        app.client[i].active = true;
+        app.client[i].conn_id = param->connect.conn_id;
+        break;
+      }
+      esp_ble_gap_start_advertising(&adv_params);
+      esp_ble_gap_config_adv_data(&scan_rsp_data);
       break;
     }
     case ESP_GATTS_DISCONNECT_EVT:
       ESP_LOGI(GATTS_TAG, "ESP_GATTS_DISCONNECT_EVT, disconnect reason 0x%x", param->disconnect.reason);
       esp_ble_gap_start_advertising(&adv_params);
+      for (int i = 0; i < CONFIG_BT_ACL_CONNECTIONS; i++) {
+        if (app.client[i].conn_id != param->disconnect.conn_id) {
+          continue;
+        }
+        app.client[i].active = false;
+        break;
+      }
       break;
     case ESP_GATTS_CONF_EVT:
       ESP_LOGI(GATTS_TAG, "ESP_GATTS_CONF_EVT, status %d attr_handle %d", param->conf.status, param->conf.handle);
@@ -499,7 +559,7 @@ void app_main(void) {
     ESP_LOGE(GATTS_TAG, "gatts app register error, error code = %x", ret);
     return;
   }
-  esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(500);
+  esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(MAX_MTU);
   if (local_mtu_ret) {
     ESP_LOGE(GATTS_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
   }
