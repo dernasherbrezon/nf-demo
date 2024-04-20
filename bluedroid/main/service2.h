@@ -7,6 +7,7 @@ enum {
   SERVICE2,
   SERVICE2_MODEL,
   SERVICE2_MANUFACTURER,
+  SERVICE2_SOFTWARE_VERSION,
   SERVICE2_LA,
   SERVICE2_LA_USER_DESCR,
   SERVICE2_LA_TYPE,
@@ -15,7 +16,8 @@ enum {
   SERVICE2_TOTAL
 };
 
-static const char service2_model_name[] = "r2cloud 2.0";
+static const char service2_model_name[] = "r2cloud";
+static const char service2_version[] = "2.0-1236445";
 static const char service2_manuf_name[] = "dernasherbrezon";
 static const char service2_la_name[] = "Load Average";
 uint8_t service2_la_ccd[2] = {0x00, 0x00};
@@ -728,6 +730,21 @@ ble_item service2_items[SERVICE2_TOTAL] = {
             .attr_value = (uint8_t *) service2_manuf_name,
             .attr_len = strlen(service2_manuf_name),
             .attr_max_len = strlen(service2_manuf_name)
+        },
+        .control = {
+            .auto_rsp = ESP_GATT_AUTO_RSP
+        }
+    }, [SERVICE2_SOFTWARE_VERSION] = {
+        .type = TYPE_CHARACTERISTIC,
+        .uuid = {
+            .len = ESP_UUID_LEN_16,
+            .uuid.uuid16 = 0x2A28
+        },
+        .property = ESP_GATT_CHAR_PROP_BIT_READ,
+        .value = {
+            .attr_value = (uint8_t *) service2_version,
+            .attr_len = strlen(service2_version),
+            .attr_max_len = strlen(service2_version)
         },
         .control = {
             .auto_rsp = ESP_GATT_AUTO_RSP

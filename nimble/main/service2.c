@@ -5,8 +5,9 @@
 #include <esp_err.h>
 #include "sdkconfig.h"
 
-static const char service2_model_name[] = "r2cloud 2.0";
+static const char service2_model_name[] = "r2cloud";
 static const char service2_manuf_name[] = "dernasherbrezon";
+static const char service2_version[] = "2.0-1236445";
 static const char service2_la_name[] = "Load Average";
 
 static const data_point_t yearly[] = {{.timestamp = 1707737400, .value = 0.841470984807897f},
@@ -749,6 +750,10 @@ static int service2_access(uint16_t conn_handle, uint16_t attr_handle, struct bl
       int rc = os_mbuf_append(ctxt->om, &service2_manuf_name, sizeof(service2_manuf_name));
       return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
     }
+    if (ble_uuid_cmp(ctxt->chr->uuid, BLE_UUID16_DECLARE(0x2A28)) == 0) {
+      int rc = os_mbuf_append(ctxt->om, &service2_version, sizeof(service2_version));
+      return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
     if (ble_uuid_cmp(ctxt->chr->uuid, BLE_UUID128_DECLARE(0x4f, 0x90, 0x7, 0x4e, 0x60, 0xde, 0x40, 0x11, 0x9f, 0xc0, 0x82, 0x3a, 0x47, 0x75, 0x58, 0x16)) == 0) {
       float la = (float) rand() / 100;
       temp_buffer[0] = PROTOCOL_VERSION;
@@ -792,6 +797,11 @@ static const struct ble_gatt_svc_def service2_items[] = {
              },
              {
                  .uuid = BLE_UUID16_DECLARE(0x2A29),
+                 .access_cb = service2_access,
+                 .flags = BLE_GATT_CHR_F_READ
+             },
+             {
+                 .uuid = BLE_UUID16_DECLARE(0x2A28),
                  .access_cb = service2_access,
                  .flags = BLE_GATT_CHR_F_READ
              },
