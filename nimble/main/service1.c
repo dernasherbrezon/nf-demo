@@ -1,6 +1,3 @@
-//
-// Created by Andrey Rodionov on 19/04/2024.
-//
 #include "service1.h"
 #include <esp_err.h>
 #include <host/ble_hs.h>

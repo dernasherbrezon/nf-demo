@@ -15,3 +15,5 @@ presentation_format_t float_format = {
     .gatt_namespace = 0x00,
     .gatt_nsdesc = 0x0000
 };
+
+global_app app;

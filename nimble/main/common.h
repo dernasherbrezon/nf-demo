@@ -2,6 +2,8 @@
 #define NF_DEMO_COMMON_H
 
 #include <stdint.h>
+#include <stdbool.h>
+#include "sdkconfig.h"
 
 #define PROTOCOL_VERSION 1
 
@@ -21,6 +23,19 @@ typedef enum {
   MONTH = 1,
   YEAR = 2
 } graph_interval_t;
+
+typedef struct {
+  bool active;
+  uint16_t conn_id;
+  bool la_notify_enabled;
+  uint16_t mtu;
+} client_info_t;
+
+typedef struct {
+  client_info_t client[CONFIG_BT_NIMBLE_MAX_CONNECTIONS];
+} global_app;
+
+extern global_app app;
 
 enum {
   TYPE_PRIMARY_SERVICE,
